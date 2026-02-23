@@ -4,6 +4,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs.msg import Image
 from sensor_msgs_py import point_cloud2
+from std_srvs.srv import SetBool
 from std_msgs.msg import Header
 
 from sonar3d.api.inspect_sonar_data import parse_rip1_packet, decode_protobuf_packet, rangeImageToXYZ
@@ -27,9 +28,11 @@ class TimerNode(Node):
         # Declare parameters
         self.declare_parameter('IP', '192.168.194.96')# '192.168.194.96' is the fallback ip, to change this, edit the launchfile.
         self.declare_parameter('speed_of_sound', 1491)    # setting this takes ~20s
+        self.declare_parameter('frame_id', 'sonar_frame')
 
         self.sonar_ip = self.get_parameter('IP').get_parameter_value().string_value
         self.sonar_speed_of_sound = self.get_parameter('speed_of_sound').get_parameter_value().integer_value
+        self.frame_id = self.get_parameter('frame_id').get_parameter_value().string_value
 
         # Create a timer that calls the timer_callback every sample_time seconds 
         sample_time = 0.01          # sample time in seconds
@@ -39,6 +42,7 @@ class TimerNode(Node):
         # Create a publisher that publishes the point cloud data
         self.pointcloud_publisher_ = self.create_publisher(PointCloud2, 'sonar_point_cloud', 10)
         self.image_publisher_ = self.create_publisher(Image, 'sonar_range_image', 10)
+        self.acoustic_service_ = self.create_service(setBool, 'set_acoustics', self.set_acoustics_callback)
 
         # Enable the acoustics on the sonar
         resp = set_acoustics(self.sonar_ip, True)
@@ -116,7 +120,15 @@ class TimerNode(Node):
             self.image_publisher_.publish(img_msg)
 
         
-        
+    def set_acoustics_callback(self, request, response):
+        if request.data:
+            self.get_logger().info("Received request to ENABLE acoustics")
+        else:            
+            self.get_logger().info("Received request to DISABLE acoustics")
+        success = set_acoustics(self.sonar_ip, request.data)
+        response.success = success
+        response.message = describe_response(self.sonar_ip, success)
+        return response   
     
 
 def main(args=None):
