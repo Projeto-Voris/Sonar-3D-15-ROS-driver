@@ -30,18 +30,16 @@ class TimerNode(Node):
         self.declare_parameter('host_IP', '192.168.2.15') #jetson IP
         self.declare_parameter('speed_of_sound', 1491)    # setting this takes ~20s
         self.declare_parameter('max_dist', 5)
-        self.declare_parameter('min_dist', 0)
 
         self.sonar_ip = self.get_parameter('IP').get_parameter_value().string_value
         self.host_ip = self.get_parameter('host_IP').get_parameter_value().string_value
         self.sonar_speed_of_sound = self.get_parameter('speed_of_sound').get_parameter_value().integer_value
-        self.max_dist = self.get_parameter('max_dist').get_parameter_value().double_value
-        self.min_dist = self.get_parameter('min_dist').get_parameter_value().double_value
+        self.max_dist = self.get_parameter('max_dist').get_parameter_value().integer_value
 
-        self.get_logger().info(f"Sonar data range {self.min_dist} m x {self.max_dist} m")
+        self.get_logger().info(f"Sonar data range: {self.max_dist} m")
         # Set speed of sound in sonar API
         resp = set_speed(self.sonar_ip, self.sonar_speed_of_sound)
-        self.get_logger().info(f"Set speed of sound: {describe_respose(self.sonar_ip, resp)}")
+        self.get_logger().info(f"Set speed of sound: {describe_response(self.sonar_ip, resp)}")
 
         # Create a timer that calls the timer_callback every sample_time seconds 
         sample_time = 0.01          # sample time in seconds
@@ -80,13 +78,12 @@ class TimerNode(Node):
     def timer_callback(self):
 
         #Receive updates of distance parameters
-        self.max_dist = self.get_parameter('max_dist').get_parameter_value().double_value
-        self.min_dist = self.get_parameter('min_dist').get_parameter_value().double_value
+        self.max_dist = self.get_parameter('max_dist').get_parameter_value().integer_value
         sonar_speed_of_sound = self.get_parameter('speed_of_sound').get_parameter_value().integer_value
-        if self.sonar_speed_of_soud != sonar_speed_of_soud:
+        if self.sonar_speed_of_sound != sonar_speed_of_sound:
             self.get_logger().info(f'Update sonar speed of sound {sonar_speed_of_sound}')
-            self.sonar_speed_of_soud = sonar_speed_of_soud
-            res = set_speed(self.sonar_ip, self.sonar_speed_of_soud)
+            self.sonar_speed_of_sound = sonar_speed_of_sound
+            res = set_speed(self.sonar_ip, self.sonar_speed_of_sound)
             self.get_logger().info(f'{describe_response(self.sonar_ip, resp)}')
         try:
             data, addr = self.sock.recvfrom(self.BUFFER_SIZE)
@@ -121,15 +118,12 @@ class TimerNode(Node):
                 y = voxels[i]['y']
                 z = voxels[i]['z']
                 # Calculate Euclidean distance from origin
-                distance = np.sqrt(x**2 + y**2 + z**2)
+                distance = np.sqrt(x**2 + y**2)
                 # Log distance for debugging
-                self.get_logger().info(f'Point {i}: x={x:.3f}, y={y:.3f}, z={z:.3f}, dist={distance:.3f}, min={self.min_dist}, max={self.max_dist}')
                 # Only include points within the min_dist and max_dist range
-                if self.min_dist <= distance <= self.max_dist:
+                if distance <= self.max_dist:
                     pts.append((x, y, z))
-                    self.get_logger().info(f'Included point {i}')
-                else:
-                    self.get_logger().info(f'Filtered out point {i}')
+
 
             # Create a PointCloud2 message
             # Create the msg heinspeader
