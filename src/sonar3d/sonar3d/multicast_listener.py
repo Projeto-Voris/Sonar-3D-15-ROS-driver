@@ -30,19 +30,29 @@ class TimerNode(Node):
         self.declare_parameter('host_IP', '192.168.2.15') #jetson IP
         self.declare_parameter('speed_of_sound', 1491)    # setting this takes ~20s
         self.declare_parameter('max_dist', 5)
+        self.declare_parameter('parent_frame', 'base_link')
+        self.declare_parameter('frame_id', 'sonar_link')
 
         self.sonar_ip = self.get_parameter('IP').get_parameter_value().string_value
         self.host_ip = self.get_parameter('host_IP').get_parameter_value().string_value
         self.sonar_speed_of_sound = self.get_parameter('speed_of_sound').get_parameter_value().integer_value
         self.max_dist = self.get_parameter('max_dist').get_parameter_value().integer_value
+        self.parent_frame = self.get_parameter('parent_frame').get_parameter_value().string_value
+        self.frame_id = self.get_parameter('frame_id').get_parameter_value().string_value
 
         self.get_logger().info(f"Sonar data range: {self.max_dist} m")
         # Set speed of sound in sonar API
         resp = set_speed(self.sonar_ip, self.sonar_speed_of_sound)
         self.get_logger().info(f"Set speed of sound: {describe_response(self.sonar_ip, resp)}")
 
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        
+        self.tf_matrix_cached = None
+        self.tf_translation_cached = None
+
         # Create a timer that calls the timer_callback every sample_time seconds 
-        sample_time = 0.01          # sample time in seconds
+        sample_time = 0.02          # sample time in seconds
         self.create_timer(sample_time, self.timer_callback)
         self.get_logger().info(f'Timer Node initialized with {1/sample_time} Hz')
 
@@ -74,6 +84,35 @@ class TimerNode(Node):
         if self.sonar_ip != "":
             self.get_logger().info(f"Filtering packets from IP: {self.sonar_ip}")
 
+
+    def get_sonar_transform(self):
+        """Busca e armazena em cache a transformada estática do sonar para o frame pai."""
+        if self.tf_matrix_cached is not None:
+            return True
+
+        try:
+            # Como a relação é estática (tf_static), buscamos com tempo zero (última disponível)
+            trans = self.tf_buffer.lookup_transform(
+                self.parent_frame,
+                self.frame_id,
+                rclpy.time.Time()
+            )
+            
+            # Extrai rotação (quatérnio) e converte em matriz 3x3 usando scipy
+            q = trans.transform.rotation
+            rotation_obj = R.from_quat([q.x, q.y, q.z, q.w])
+            self.tf_matrix_cached = rotation_obj.as_matrix()
+            
+            # Extrai translação [x, y, z]
+            t = trans.transform.translation
+            self.tf_translation_cached = np.array([t.x, t.y, t.z])
+            
+            self.get_logger().info(f"Transformada obtida com sucesso de 'sonar_frame' para '{self.parent_frame}'!")
+            return True
+
+        except TransformException as ex:
+            self.get_logger().warning(f"Aguardando a transformada estática de 'sonar_frame' para '{self.parent_frame}': {ex}", throttle_duration_sec=2.0)
+            return False
 
     def timer_callback(self):
 
@@ -124,12 +163,17 @@ class TimerNode(Node):
                 if distance <= self.max_dist:
                     pts.append((x, y, z))
 
+            if len(pts_local) > 0:
+                # Multiplicação matricial vetorizada com Numpy (Performance Otimizada)
+                # pts_transformed = (Matriz_Rotacao * pontos_locais) + Translacao
+                pts_transformed = np.dot(pts_local, self.tf_matrix_cached.T) + self.tf_translation_cached
+                pts_list = pts_transformed.tolist()
 
             # Create a PointCloud2 message
             # Create the msg heinspeader
             header = Header()
             header.stamp = self.get_clock().now().to_msg()  # Use ROS2 time
-            header.frame_id = 'sonar_frame'
+            header.frame_id = self.parent_frame  # Set the frame ID to the parent frame
 
             cloud_msg = point_cloud2.create_cloud_xyz32(header, pts)
 

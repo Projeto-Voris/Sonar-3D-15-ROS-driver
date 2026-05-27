@@ -7,6 +7,9 @@ def generate_launch_description():
         DeclareLaunchArgument('namespace', default_value='', description='Namespace for the sonar3d node'),
         DeclareLaunchArgument('ip', default_value='192.168.2.30', description='IP address of the sonar device'),
         DeclareLaunchArgument('speed_of_sound', default_value='1514', description='Speed of sound in freshwater water in m/s'),
+        DeclareLaunchArgument('max_dist', default_value='5', description='Maximum distance to consider for point cloud in meters'),
+        DeclareLaunchArgument('parent_frame', default_value='base_link', description='Parent frame for the sonar data'),
+        DeclareLaunchArgument('frame_id', default_value='sonar_link', description='Frame ID'),
 
         Node(
             package='sonar3d',
@@ -16,7 +19,10 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 {'IP': LaunchConfiguration('ip')},
-                {'speed_of_sound': LaunchConfiguration('speed_of_sound')}
+                {'speed_of_sound': LaunchConfiguration('speed_of_sound')},
+                {'max_dist': LaunchConfiguration('max_dist')},
+                {'parent_frame': LaunchConfiguration('parent_frame')},
+                {'frame_id': LaunchConfiguration('frame_id')}
             ]
         )
     ])
