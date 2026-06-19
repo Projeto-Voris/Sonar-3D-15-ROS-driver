@@ -1,5 +1,6 @@
--r sonar3d/api/requirements.txt
+# Water Linked sonar client + Range Image Protocol (RIP1/RIP2) parsing.
+# See https://pypi.org/project/wlsonar/
+wlsonar>=0.5,<0.6
 
 setuptools
 numpy
-

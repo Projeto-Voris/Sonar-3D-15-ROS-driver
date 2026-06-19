@@ -3,7 +3,7 @@
 <package format="3">
   <name>sonar3d</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>ROS 2 driver for the Water Linked Sonar 3D-15, built on the wlsonar package.</description>
   <maintainer email="support@waterlinked.com">Water Linked</maintainer>
   <license>MIT</license>
 
@@ -12,10 +12,19 @@
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
 
-  <exec_depend>python3-protobuf</exec_depend>
-  <exec_depend>python3-requests</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>sensor_msgs_py</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
 
+  <!--
+    The Water Linked sonar client and Range Image Protocol (RIP1/RIP2) parsing
+    are provided by the 'wlsonar' package, which is distributed on PyPI and is
+    not available via rosdep. Install it with: pip install -r requirements.txt
+    (see https://pypi.org/project/wlsonar/).
+  -->
 
   <export>
     <build_type>ament_python</build_type>

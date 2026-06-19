@@ -2,65 +2,54 @@
 
 ## Overview
 
-This package provides a ROS 2 driver for the **Water Linked Sonar 3D-15**, a real-time multibeam imaging sonar. The sonar streams 3D range images over UDP multicast, which are decoded and published as standard ROS messages:
+This package provides a ROS 2 driver for the **Water Linked Sonar 3D-15**, a real-time multibeam imaging sonar. The sonar streams data over UDP multicast, which is decoded and published as standard ROS messages.
 
-- 3D point clouds: `sensor_msgs/PointCloud2` on `/sonar_point_cloud`
-- Raw range images: `sensor_msgs/Image` on `/sonar_range_image`
-
-The driver listens to RIP1 multicast packets, extracts and parses `RangeImage` protobuf messages, and converts the sonar data into formats usable by standard ROS visualization and processing tools.
+Range Image Protocol parsing and sonar configuration are handled by the official [`wlsonar`](https://pypi.org/project/wlsonar/) Python package ([source](https://github.com/waterlinked/wlsonar)), so both **RIP1** and **RIP2** packets are supported.
 
 ---
 
 ## Features
 
-- Receives and decodes **RIP1** packets via UDP multicast
-- Publishes point clouds and range images at real-time rates
-- Automatically enables sonar acoustics and udp multicast on startup
-- Compatible with ROS 2 (tested on **Jazzy**)
+- Receives and decodes **RIP1** and **RIP2** packets via UDP multicast (RIP2 packets are snappy-compressed)
+- Publishes point clouds, range images, and signal-strength images
+- Automatically enables sonar acoustics and UDP multicast output on startup
+- Replays recorded `.sonar` files into ROS 2 (for recording to a bag)
+- Compatible with ROS 2 (tested on **Jazzy**, should also work on **Humble**)
 
 ---
 
 ## Topics
 
-| Topic               | Message Type              | Description                        |
-|--------------------|---------------------------|------------------------------------|
-| `/sonar_point_cloud` | `sensor_msgs/PointCloud2` | 3D point cloud in ROS frame        |
-| `/sonar_range_image` | `sensor_msgs/Image`       | Raw float32 range image (in meters) |
+The live driver (`sonar_publisher`) and the file player (`sonar_to_bag`) publish the same topics:
+
+| Topic                            | Message Type              | Source message          | Description                                  |
+|----------------------------------|---------------------------|-------------------------|----------------------------------------------|
+| `/sonar3d/point_cloud`           | `sensor_msgs/PointCloud2` | `RangeImage`            | 3D point cloud (xyz, meters)                 |
+| `/sonar3d/range_image`           | `sensor_msgs/Image`       | `RangeImage`            | Range image, `32FC1`, distance in meters     |
+| `/sonar3d/signal_strength_image` | `sensor_msgs/Image`       | `BitmapImageGreyscale8` | Signal-strength image, `mono8`               |
+
+The point cloud coordinate convention follows `wlsonar.range_image_to_xyz`: `x` forward (range), `y` horizontal, `z` vertical.
 
 ---
 
-## Usage
+## Installation
 
-### 1. Clone the repository into your ros2 workspace
+### 1. Clone the repository into your ROS 2 workspace
 
 ```bash
 cd ~/ros2_ws/src
-git clone --recurse-submodules https://github.com/waterlinked/Sonar-3D-15-ROS-driver.git
+git clone https://github.com/waterlinked/Sonar-3D-15-ROS-driver.git
 ```
 
-### 2. Install requirements
+### 2. Install the Python requirements
 
-Install requirements:
+The driver depends on the [`wlsonar`](https://pypi.org/project/wlsonar/) package:
 
 ```bash
-pip install -r requirements.txt
+pip install -r src/sonar3d/requirements.txt
 ```
 
-
-### 3. Set IP-address of Sonar 3D-15
-
-Change to your sonars IP-address in the sonar3d.launch.py file:
-
-```python
-    {'IP': '192.168.194.96'},  # Change to your sonar IP, '192.168.194.96' is the fallback ip.
-```
-Alternatively, you can modify the default parameter in `multicast_listener.py` directly.
-
-```python
-    self.declare_parameter('IP', '192.168.194.96')#  <-- your sonar's IP here, '192.168.194.96' is the fallback ip.
-```
-
-### 4. Build the package from the root of your ros project
+### 3. Build the package
 
 ```bash
 cd ~/ros2_ws
@@ -69,41 +58,60 @@ colcon build --packages-select sonar3d
 source install/local_setup.bash
 ```
 
-### 5. Run the package
+---
+
+## Usage
+
+### Live driver
+
+Set your sonar's IP in [`launch/sonar3d.launch.py`](src/sonar3d/launch/sonar3d.launch.py):
+
+```python
+{'IP': '192.168.194.96'},  # Change to your sonar IP. '192.168.194.96' is the fallback IP.
+```
+
+Then launch:
 
 ```bash
 ros2 launch sonar3d sonar3d.launch.py
 ```
 
-### 6. Playback of .sonar files and recording to ROS2 bagfile
+Parameters:
 
-A script has been included, which onverts Sonar 3D-15 .sonar files to ROS2 bagfiles.
+| Parameter        | Type     | Default           | Description                                                                 |
+|------------------|----------|-------------------|-----------------------------------------------------------------------------|
+| `IP`             | `string` | `192.168.194.96`  | IP address of the sonar.                                                    |
+| `speed_of_sound` | `double` | `0.0`             | Speed of sound in m/s. `0.0` leaves the sonar setting unchanged. Setting a value can take ~20 s. |
+| `frame_id`       | `string` | `sonar3d`         | `frame_id` used in published message headers.                               |
 
-Requirements:
-- Tested with ROS2 Humble and Jazzy
-- numpy, protobuf, sonar_3d_15_protcol_pb2.py
-- sensor_msgs, std_msgs, builtin_interfaces
-- cv_bridge (for ROS2)
+### Playback of `.sonar` files and recording to a ROS 2 bag
 
-Usage:
+A recorded `.sonar` file (RIP1 or RIP2) can be replayed as ROS 2 messages and recorded to a bag.
+
 1. Start recording in one terminal:
-```
-ros2 bag record -o <output_bag_dir> /sonar3d/range_image /sonar3d/point_cloud
-```
-2. In another terminal, run:
-```
-python3 sonar_to_bag.py --file <sonar_file.sonar> --realtime-factor 1.0
+
+```bash
+ros2 bag record -o <output_bag_dir> \
+    /sonar3d/point_cloud /sonar3d/range_image /sonar3d/signal_strength_image
 ```
 
-The sonar_to_bag.py has been shared by Marios Xanthidis of SINTEF Ocean, with acknowledgements:
+2. In another terminal, replay the file (paced to the original timestamps):
+
+```bash
+ros2 run sonar3d sonar_to_bag --file <recording.sonar> --realtime-factor 1.0
+```
+
+Options: `--realtime-factor` (playback speed, `1.0` = real time), `--frame-id` (default `sonar3d`).
+
+The `sonar_to_bag` playback was originally contributed by Marios Xanthidis of SINTEF Ocean, with acknowledgements:
 
  - Supported by the Research Council of Norway (EchoNav: NO-359447)
- - Filtering and name conventions adapted from Alberto Quattrini Li @ Dartmouth
-   His repository for ROS1 integration of the Sonar 3D-15 can be found in:
+ - Filtering and name conventions adapted from Alberto Quattrini Li @ Dartmouth.
+   His repository for ROS1 integration of the Sonar 3D-15 can be found at:
    https://github.com/quattrinili/Sonar-3D-15-api-example/tree/ros1
 
-### 7. License
+---
+
+## License
 
 This package is distributed under the MIT License.
-
-

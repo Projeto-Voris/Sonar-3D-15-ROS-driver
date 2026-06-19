@@ -1,12 +1,5 @@
-# Import and expose the necessary components
+"""ROS 2 driver for the Water Linked Sonar 3D-15.
 
-# Import the modules you need from the API example
-from .api.sonar_3d_15_protocol_pb2 import BitmapImageGreyscale8, RangeImage
-from .api.inspect_sonar_data import parse_rip1_packet, decode_protobuf_packet
-
-__all__ = [
-    'BitmapImageGreyscale8', 
-    'RangeImage',
-    'parse_rip1_packet',
-    'decode_protobuf_packet'
-]
+Range Image Protocol parsing and sonar configuration are provided by the
+`wlsonar` package (https://pypi.org/project/wlsonar/).
+"""

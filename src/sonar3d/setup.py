@@ -17,12 +17,14 @@ setup(
     zip_safe=True,
     maintainer='Water Linked',
     maintainer_email='support@waterlinked.com',
-    description='TODO: Package description',
+    description='ROS 2 driver for the Water Linked Sonar 3D-15, built on the wlsonar package.',
     license='MIT',
+    install_requires=['setuptools', 'wlsonar>=0.5,<0.6', 'numpy'],
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'sonar_publisher = sonar3d.multicast_listener:main'
+            'sonar_publisher = sonar3d.multicast_listener:main',
+            'sonar_to_bag = sonar3d.sonar_to_bag:main',
         ],
     },
 )
